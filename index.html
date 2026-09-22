@@ -6,52 +6,61 @@
     <title>Ajout de Personnages - Bracket</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* --- DARK MODE --- */
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center; background: #121212; color: #e0e0e0; }
         .form-box { background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         input, select { padding: 10px; margin: 10px 0; width: 100%; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #2d2d2d; color: white; }
         
-        /* Boutons du formulaire */
         button { padding: 10px; width: 100%; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; border: none; transition: 0.2s; margin-top: 10px;}
         .btn-submit { background-color: #2563eb; color: white; }
         .btn-submit:hover { background-color: #1d4ed8; }
         .btn-submit:disabled { background-color: #475569; cursor: not-allowed; }
         .btn-cancel { background-color: #4b5563; color: white; display: none; }
         .btn-cancel:hover { background-color: #374151; }
+        .btn-delete-img { background-color: #7f1d1d; color: #fca5a5; font-size: 13px; padding: 6px; width: auto; margin-top: 5px; }
+        .btn-delete-img:hover { background-color: #991b1b; }
         
         .separator { margin: 5px 0; font-size: 12px; color: #888; font-weight: bold; }
         
-        /* Cartes des personnages */
         .character-list { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 30px; }
         .card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; width: 140px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .card img { width: 100%; height: 140px; object-fit: cover; }
         .card p { margin: 5px 0; font-size: 14px; }
-        .tier { font-weight: bold; color: #f87171; padding-bottom: 5px; } /* Rouge clair */
+        .tier { font-weight: bold; color: #f87171; padding-bottom: 5px; }
         
-        /* Boutons de la carte */
         .actions { display: flex; border-top: 1px solid #333; }
         .btn-icon { width: 50%; margin: 0; padding: 8px 0; background: #2d2d2d; color: white; border-radius: 0; font-size: 14px; }
         .btn-icon:hover { background: #444; }
         .btn-icon:first-child { border-right: 1px solid #333; }
+
+        /* FENÊTRE DE CHOIX (MODAL) */
+        #image-choice-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; }
+        .modal-card { background: #1e293b; padding: 30px; border-radius: 15px; max-width: 450px; width: 90%; text-align: center; border: 1px solid #334155; }
+        .choice-options { display: flex; justify-content: space-around; gap: 15px; margin: 20px 0; }
+        .choice-option { background: #334155; padding: 15px; border-radius: 10px; cursor: pointer; border: 2px solid transparent; transition: 0.2s; width: 45%; }
+        .choice-option:hover { border-color: #3b82f6; transform: scale(1.03); }
+        .choice-option img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
     </style>
 </head>
 <body>
 
-    <h1>🏆 Bracket </h1>
-    <button onclick="window.location.href='tournoi.html'" style="background: #10b981; margin-bottom: 20px;">🎮 Lancer le Tournoi</button>
+    <button onclick="window.location.href='tournoi.html'" style="background: #10b981; margin-bottom: 20px; width: auto; padding: 10px 20px;">🎮 Lancer le Tournoi</button>
+
+    <h1>🏆 Bracket : L'Arène</h1>
     
     <div class="form-box">
         <form id="add-form">
             <input type="text" id="name" placeholder="Nom du personnage" required>
             
             <div style="background: #252525; padding: 10px; border-radius: 5px; margin: 10px 0; border: 1px solid #333;">
-                <label style="font-size: 14px; font-weight: bold;">Choisir une image (PC/Téléphone)</label>
+                <label style="font-size: 14px; font-weight: bold;">Image (PC/Téléphone)</label>
                 <input type="file" id="image_file" accept="image/*">
                 
                 <div class="separator">OU</div>
                 
-                <label style="font-size: 14px; font-weight: bold;">Mettre un lien URL</label>
+                <label style="font-size: 14px; font-weight: bold;">Lien URL</label>
                 <input type="url" id="image_url" placeholder="Lien direct de l'image">
+
+                <button type="button" class="btn-delete-img" onclick="clearImageInputs()">🗑️ Supprimer l'image</button>
             </div>
 
             <select id="tier">
@@ -68,21 +77,38 @@
         </form>
     </div>
 
+    <!-- FENÊTRE DE CHOIX D'IMAGE -->
+    <div id="image-choice-modal">
+        <div class="modal-card">
+            <h3 style="margin-top:0; color:#facc15;">Deux images fournies !</h3>
+            <p style="color:#94a3b8; font-size: 14px;">Vous avez mis un fichier ET un lien. Laquelle voulez-vous utiliser ?</p>
+            <div class="choice-options">
+                <div class="choice-option" onclick="resolveImageChoice('file')">
+                    <img id="modal-preview-file" src="">
+                    <p style="margin:5px 0; font-size:14px; font-weight:bold;">Fichier local</p>
+                </div>
+                <div class="choice-option" onclick="resolveImageChoice('url')">
+                    <img id="modal-preview-url" src="">
+                    <p style="margin:5px 0; font-size:14px; font-weight:bold;">Lien URL</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <h2>Combattants validés :</h2>
     <div class="character-list" id="list"></div>
 
     <script>
-        // --- À MODIFIER AVEC TES CLÉS ---
         const SUPABASE_URL = 'https://ighevbtlfsjrtyajgcwy.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlnaGV2YnRsZnNqcnR5YWpnY3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDc1NTcsImV4cCI6MjEwNTU4MzU1N30.db99R6p6E8rOekBWly1WvlT0oVsH-LNhihw-Km_3SP8';
-        // ---------------------------------
-
         const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        let allCharacters = []; // On stocke les persos en mémoire pour les éditer facilement
-        let editingId = null;   // Si null = Ajout. Si rempli = Modification.
+        const DEFAULT_IMAGE = 'https://via.placeholder.com/150?text=Pas+d+image';
 
-        // --- CHARGEMENT ---
+        let allCharacters = [];
+        let editingId = null;
+        let imageChoiceResolver = null; // Pour la fenêtre de choix
+
         async function loadCharacters() {
             const { data, error } = await client.from('characters').select('*').order('name');
             if (error) return console.error("Erreur de chargement", error);
@@ -94,7 +120,7 @@
             data.forEach(char => {
                 list.innerHTML += `
                     <div class="card">
-                        <img src="${char.image_url}" alt="${char.name}" onerror="this.src='https://via.placeholder.com/130?text=Image+Cassée'">
+                        <img src="${char.image_url}" alt="${char.name}" onerror="this.src='${DEFAULT_IMAGE}'">
                         <p><b>${char.name}</b></p>
                         <p class="tier">Rank: ${char.tier}</p>
                         <div class="actions">
@@ -106,7 +132,6 @@
             });
         }
 
-        // --- SUPPRESSION ---
         window.deleteChar = async function(id) {
             if (confirm("Sûr de vouloir supprimer ce combattant ?")) {
                 await client.from('characters').delete().eq('id', id);
@@ -114,7 +139,11 @@
             }
         };
 
-        // --- PRÉPARATION À L'ÉDITION ---
+        window.clearImageInputs = function() {
+            document.getElementById('image_file').value = "";
+            document.getElementById('image_url').value = "";
+        };
+
         window.startEdit = function(id) {
             const char = allCharacters.find(c => c.id === id);
             if (!char) return;
@@ -123,36 +152,51 @@
             document.getElementById('name').value = char.name;
             document.getElementById('tier').value = char.tier;
             document.getElementById('image_url').value = char.image_url;
-            document.getElementById('image_file').value = ""; // On vide le champ fichier
+            document.getElementById('image_file').value = "";
 
-            // On change l'apparence du bouton
             const btn = document.getElementById('submit-btn');
             btn.innerText = "Mettre à jour " + char.name;
-            btn.style.backgroundColor = "#d97706"; // orange
+            btn.style.backgroundColor = "#d97706";
             document.getElementById('cancel-btn').style.display = "block";
 
-            window.scrollTo(0, 0); // Remonte tout en haut
+            window.scrollTo(0, 0);
         };
 
-        // --- ANNULER L'ÉDITION ---
         window.cancelEdit = function() {
             editingId = null;
             document.getElementById('add-form').reset();
             
             const btn = document.getElementById('submit-btn');
             btn.innerText = "Ajouter au Bracket";
-            btn.style.backgroundColor = ""; // reset
+            btn.style.backgroundColor = "";
             document.getElementById('cancel-btn').style.display = "none";
         };
 
-        // --- SOUMISSION (AJOUT OU MODIFICATION) ---
+        // Fonction pour afficher la fenêtre de choix si les deux images sont remplies
+        function askUserImageChoice(fileObj, urlStr) {
+            return new Promise((resolve) => {
+                imageChoiceResolver = resolve;
+                document.getElementById('modal-preview-file').src = URL.createObjectURL(fileObj);
+                document.getElementById('modal-preview-url').src = urlStr;
+                document.getElementById('image-choice-modal').style.display = 'flex';
+            });
+        }
+
+        window.resolveImageChoice = function(choice) {
+            document.getElementById('image-choice-modal').style.display = 'none';
+            if (imageChoiceResolver) {
+                imageChoiceResolver(choice);
+                imageChoiceResolver = null;
+            }
+        };
+
         document.getElementById('add-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const btn = document.getElementById('submit-btn');
             btn.disabled = true;
             const originalText = btn.innerText;
-            btn.innerText = "Envoi en cours...";
+            btn.innerText = "Traitement...";
 
             const name = document.getElementById('name').value;
             const tier = document.getElementById('tier').value;
@@ -161,42 +205,59 @@
             
             let finalImageUrl = "";
 
-            // Gestion de l'image (Upload)
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const fileName = Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9.]/g, ''); 
-                
-                const { error: uploadError } = await client.storage.from('images').upload(fileName, file);
-                if (uploadError) {
-                    alert("Erreur lors de l'upload de l'image.");
-                    btn.disabled = false; btn.innerText = originalText;
-                    return;
+            // Gestion de l'image
+            if (fileInput.files.length > 0 && urlInput !== "") {
+                // Cas où les deux sont remplis : on demande à l'utilisateur via la modale
+                let choice = await askUserImageChoice(fileInput.files[0], urlInput);
+                if (choice === 'file') {
+                    finalImageUrl = await uploadFile(fileInput.files[0]);
+                } else {
+                    finalImageUrl = urlInput;
                 }
-                const { data } = client.storage.from('images').getPublicUrl(fileName);
-                finalImageUrl = data.publicUrl;
+            } else if (fileInput.files.length > 0) {
+                finalImageUrl = await uploadFile(fileInput.files[0]);
             } else if (urlInput !== "") {
                 finalImageUrl = urlInput;
             } else {
-                alert("Veuillez choisir une image (Fichier ou URL).");
-                btn.disabled = false; btn.innerText = originalText;
-                return;
+                // Si aucune image n'est fournie, on regarde si on édite et qu'on veut garder l'ancienne, sinon défaut
+                if (editingId) {
+                    const existingChar = allCharacters.find(c => c.id === editingId);
+                    finalImageUrl = existingChar ? existingChar.image_url : DEFAULT_IMAGE;
+                } else {
+                    finalImageUrl = DEFAULT_IMAGE;
+                }
             }
 
-            // Choix entre Ajout et Mise à jour
+            if (!finalImageUrl) {
+                btn.disabled = false;
+                btn.innerText = originalText;
+                return; // Annulé en cas d'erreur d'upload
+            }
+
+            // Enregistrement Base de données
             if (editingId) {
-                // MISE À JOUR
                 const { error } = await client.from('characters').update({ name, image_url: finalImageUrl, tier }).eq('id', editingId);
                 if (error) alert("Erreur lors de la modification");
             } else {
-                // AJOUT CLASSIQUE
                 const { error } = await client.from('characters').insert([{ name, image_url: finalImageUrl, tier }]);
                 if (error) alert("Erreur lors de l'ajout");
             }
 
-            cancelEdit(); // Réinitialise le formulaire
-            loadCharacters(); // Met à jour la liste
+            cancelEdit();
+            loadCharacters();
             btn.disabled = false;
         });
+
+        async function uploadFile(file) {
+            const fileName = Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9.]/g, ''); 
+            const { error: uploadError } = await client.storage.from('images').upload(fileName, file);
+            if (uploadError) {
+                alert("Erreur lors de l'upload de l'image.");
+                return null;
+            }
+            const { data } = client.storage.from('images').getPublicUrl(fileName);
+            return data.publicUrl;
+        }
 
         loadCharacters();
     </script>
