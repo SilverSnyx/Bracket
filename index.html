@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajout de Personnages - Bracket</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* --- DARK MODE --- */
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center; background: #121212; color: #e0e0e0; }
+        .form-box { background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        input, select { padding: 10px; margin: 10px 0; width: 100%; box-sizing: border-box; border-radius: 5px; border: 1px solid #444; background: #2d2d2d; color: white; }
+        
+        /* Boutons du formulaire */
+        button { padding: 10px; width: 100%; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; border: none; transition: 0.2s; margin-top: 10px;}
+        .btn-submit { background-color: #2563eb; color: white; }
+        .btn-submit:hover { background-color: #1d4ed8; }
+        .btn-submit:disabled { background-color: #475569; cursor: not-allowed; }
+        .btn-cancel { background-color: #4b5563; color: white; display: none; }
+        .btn-cancel:hover { background-color: #374151; }
+        
+        .separator { margin: 5px 0; font-size: 12px; color: #888; font-weight: bold; }
+        
+        /* Cartes des personnages */
+        .character-list { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 30px; }
+        .card { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; width: 140px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card img { width: 100%; height: 140px; object-fit: cover; }
+        .card p { margin: 5px 0; font-size: 14px; }
+        .tier { font-weight: bold; color: #f87171; padding-bottom: 5px; } /* Rouge clair */
+        
+        /* Boutons de la carte */
+        .actions { display: flex; border-top: 1px solid #333; }
+        .btn-icon { width: 50%; margin: 0; padding: 8px 0; background: #2d2d2d; color: white; border-radius: 0; font-size: 14px; }
+        .btn-icon:hover { background: #444; }
+        .btn-icon:first-child { border-right: 1px solid #333; }
+    </style>
+</head>
+<body>
+
+    <h1>🏆 Bracket </h1>
+    <button onclick="window.location.href='tournoi.html'" style="background: #10b981; margin-bottom: 20px;">🎮 Lancer le Tournoi</button>
+    
+    <div class="form-box">
+        <form id="add-form">
+            <input type="text" id="name" placeholder="Nom du personnage" required>
+            
+            <div style="background: #252525; padding: 10px; border-radius: 5px; margin: 10px 0; border: 1px solid #333;">
+                <label style="font-size: 14px; font-weight: bold;">Choisir une image (PC/Téléphone)</label>
+                <input type="file" id="image_file" accept="image/*">
+                
+                <div class="separator">OU</div>
+                
+                <label style="font-size: 14px; font-weight: bold;">Mettre un lien URL</label>
+                <input type="url" id="image_url" placeholder="Lien direct de l'image">
+            </div>
+
+            <select id="tier">
+                <option value="S">Tier S (Incroyable)</option>
+                <option value="A">Tier A (Très fort)</option>
+                <option value="B">Tier B (Fort)</option>
+                <option value="C">Tier C (Moyen)</option>
+                <option value="D">Tier D (Faible)</option>
+                <option value="E">Tier E (Chair à canon)</option>
+            </select>
+            
+            <button type="submit" id="submit-btn" class="btn-submit">Ajouter au Bracket</button>
+            <button type="button" id="cancel-btn" class="btn-cancel" onclick="cancelEdit()">Annuler la modification</button>
+        </form>
+    </div>
+
+    <h2>Combattants validés :</h2>
+    <div class="character-list" id="list"></div>
+
+    <script>
+        // --- À MODIFIER AVEC TES CLÉS ---
+        const SUPABASE_URL = 'https://ighevbtlfsjrtyajgcwy.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlnaGV2YnRsZnNqcnR5YWpnY3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDc1NTcsImV4cCI6MjEwNTU4MzU1N30.db99R6p6E8rOekBWly1WvlT0oVsH-LNhihw-Km_3SP8';
+        // ---------------------------------
+
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let allCharacters = []; // On stocke les persos en mémoire pour les éditer facilement
+        let editingId = null;   // Si null = Ajout. Si rempli = Modification.
+
+        // --- CHARGEMENT ---
+        async function loadCharacters() {
+            const { data, error } = await client.from('characters').select('*').order('name');
+            if (error) return console.error("Erreur de chargement", error);
+            
+            allCharacters = data;
+            const list = document.getElementById('list');
+            list.innerHTML = '';
+            
+            data.forEach(char => {
+                list.innerHTML += `
+                    <div class="card">
+                        <img src="${char.image_url}" alt="${char.name}" onerror="this.src='https://via.placeholder.com/130?text=Image+Cassée'">
+                        <p><b>${char.name}</b></p>
+                        <p class="tier">Rang: ${char.tier}</p>
+                        <div class="actions">
+                            <button type="button" class="btn-icon" onclick="startEdit('${char.id}')">✏️ Éditer</button>
+                            <button type="button" class="btn-icon" onclick="deleteChar('${char.id}')">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- SUPPRESSION ---
+        window.deleteChar = async function(id) {
+            if (confirm("Sûr de vouloir supprimer ce combattant ?")) {
+                await client.from('characters').delete().eq('id', id);
+                loadCharacters();
+            }
+        };
+
+        // --- PRÉPARATION À L'ÉDITION ---
+        window.startEdit = function(id) {
+            const char = allCharacters.find(c => c.id === id);
+            if (!char) return;
+
+            editingId = id;
+            document.getElementById('name').value = char.name;
+            document.getElementById('tier').value = char.tier;
+            document.getElementById('image_url').value = char.image_url;
+            document.getElementById('image_file').value = ""; // On vide le champ fichier
+
+            // On change l'apparence du bouton
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "Mettre à jour " + char.name;
+            btn.style.backgroundColor = "#d97706"; // orange
+            document.getElementById('cancel-btn').style.display = "block";
+
+            window.scrollTo(0, 0); // Remonte tout en haut
+        };
+
+        // --- ANNULER L'ÉDITION ---
+        window.cancelEdit = function() {
+            editingId = null;
+            document.getElementById('add-form').reset();
+            
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = "Ajouter au Bracket";
+            btn.style.backgroundColor = ""; // reset
+            document.getElementById('cancel-btn').style.display = "none";
+        };
+
+        // --- SOUMISSION (AJOUT OU MODIFICATION) ---
+        document.getElementById('add-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "Envoi en cours...";
+
+            const name = document.getElementById('name').value;
+            const tier = document.getElementById('tier').value;
+            const fileInput = document.getElementById('image_file');
+            const urlInput = document.getElementById('image_url').value;
+            
+            let finalImageUrl = "";
+
+            // Gestion de l'image (Upload)
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const fileName = Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9.]/g, ''); 
+                
+                const { error: uploadError } = await client.storage.from('images').upload(fileName, file);
+                if (uploadError) {
+                    alert("Erreur lors de l'upload de l'image.");
+                    btn.disabled = false; btn.innerText = originalText;
+                    return;
+                }
+                const { data } = client.storage.from('images').getPublicUrl(fileName);
+                finalImageUrl = data.publicUrl;
+            } else if (urlInput !== "") {
+                finalImageUrl = urlInput;
+            } else {
+                alert("Veuillez choisir une image (Fichier ou URL).");
+                btn.disabled = false; btn.innerText = originalText;
+                return;
+            }
+
+            // Choix entre Ajout et Mise à jour
+            if (editingId) {
+                // MISE À JOUR
+                const { error } = await client.from('characters').update({ name, image_url: finalImageUrl, tier }).eq('id', editingId);
+                if (error) alert("Erreur lors de la modification");
+            } else {
+                // AJOUT CLASSIQUE
+                const { error } = await client.from('characters').insert([{ name, image_url: finalImageUrl, tier }]);
+                if (error) alert("Erreur lors de l'ajout");
+            }
+
+            cancelEdit(); // Réinitialise le formulaire
+            loadCharacters(); // Met à jour la liste
+            btn.disabled = false;
+        });
+
+        loadCharacters();
+    </script>
+</body>
+</html>

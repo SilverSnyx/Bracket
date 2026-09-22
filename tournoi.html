@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏆 Bracket - Le Tournoi</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow-x: hidden; }
+        
+        .top-nav { position: absolute; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 10; }
+        .nav-btn { background: #334155; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1rem; }
+        .nav-btn:hover { background: #475569; }
+
+        h1 { margin-top: 60px; font-size: clamp(1.8rem, 4vw, 2.5rem); text-transform: uppercase; letter-spacing: 2px; color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); text-align: center; }
+        h2 { color: #94a3b8; font-size: clamp(1.2rem, 3vw, 1.8rem); margin-bottom: 20px; text-align: center; }
+        
+        button.action-btn { background: #3b82f6; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; text-transform: uppercase; }
+        button.action-btn:hover { background: #2563eb; transform: scale(1.05); }
+
+        #duel-screen { display: none; width: 100%; max-width: 1200px; text-align: center; padding: 0 10px; box-sizing: border-box; }
+        .arena { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 30px; padding: 20px 0; }
+        
+        .fighter { background: #1e293b; border: 3px solid #334155; border-radius: 15px; width: 42vw; max-width: 450px; min-width: 280px; cursor: pointer; transition: all 0.3s ease; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+        .fighter:hover { transform: translateY(-5px) scale(1.02); border-color: #3b82f6; box-shadow: 0 15px 30px rgba(59, 130, 246, 0.4); }
+        .fighter img { width: 100%; height: 45vh; min-height: 350px; max-height: 550px; object-fit: cover; }
+        .fighter p { font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: bold; margin: 15px 0; padding: 0 10px; }
+        
+        .vs { font-size: 3rem; font-weight: bold; font-style: italic; color: #ef4444; text-shadow: 2px 2px 0 #000; margin: 0 20px; }
+
+        .match-controls { margin-top: 30px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        .ctrl-btn { background: #475569; color: white; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 8px; cursor: pointer; transition: 0.2s;}
+        .ctrl-btn:hover { background: #64748b; }
+
+        #history-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: #1e293b; padding: 30px; border-radius: 15px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; text-align: left; }
+        .history-item { background: #334155; margin: 10px 0; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div class="top-nav">
+        <button class="nav-btn" onclick="window.location.href='index.html'">⬅️ Éditer les persos</button>
+    </div>
+
+    <h1>Ultimate Bracket</h1>
+
+    <div id="setup-screen" style="text-align: center; margin-top: 50px; background: #1e293b; padding: 40px; border-radius: 15px;">
+        <h2 id="setup-msg">Chargement...</h2>
+        <button id="start-btn" class="action-btn" style="display: none;" onclick="startTournament()">Démarrer le tournoi</button>
+    </div>
+
+    <div id="duel-screen">
+        <h2 id="round-title">Préparation des combats...</h2>
+        <p style="color: #cbd5e1; font-size: 1.2rem; margin-top: -10px; margin-bottom: 20px;">Match <span id="match-number">1</span> sur <span id="total-matches">X</span></p>
+        
+        <div class="arena">
+            <div class="fighter" id="card-left" onclick="selectWinner('left')">
+                <img id="img-left" src="">
+                <p id="name-left">Combattant 1</p>
+            </div>
+            
+            <div class="vs">VS</div>
+            
+            <div class="fighter" id="card-right" onclick="selectWinner('right')">
+                <img id="img-right" src="">
+                <p id="name-right">Combattant 2</p>
+            </div>
+        </div>
+        
+        <div class="match-controls">
+            <button class="ctrl-btn" onclick="undoLastMatch()">⏪ Annuler le dernier match</button>
+            <button class="ctrl-btn" onclick="openHistory()">📜 Historique & Corrections</button>
+        </div>
+    </div>
+
+    <div id="history-modal">
+        <div class="modal-content">
+            <h2 style="margin-top: 0;">Historique du tournoi</h2>
+            <p style="color: #94a3b8; font-size: 0.9rem;">Si vous refaites un ancien match, le tournoi s'arrêtera pour vous faire rejouer ce match et tous les matchs suivants de cette branche. Ensuite, vous reviendrez automatiquement où vous en étiez !</p>
+            <div id="history-list"></div>
+            <button class="action-btn" style="width: 100%; margin-top: 20px; background: #475569;" onclick="closeHistory()">Fermer l'historique</button>
+        </div>
+    </div>
+
+    <div id="winner-screen" style="display:none; text-align: center;">
+        <h2 style="font-size: clamp(2rem, 5vw, 3rem); color: #facc15;">🏆 LE GOAT 🏆</h2>
+        <h3 id="winner-name" style="font-size: 2.5rem; margin: 10px 0;"></h3>
+        <img id="winner-img" src="" style="width: 90vw; max-width: 500px; height: 50vh; min-height: 400px; object-fit: cover; border-radius: 20px; border: 5px solid #facc15;">
+        <br>
+        <button class="action-btn" onclick="location.reload()" style="margin-top: 40px;">Relancer un tournoi</button>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://ighevbtlfsjrtyajgcwy.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlnaGV2YnRsZnNqcnR5YWpnY3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDc1NTcsImV4cCI6MjEwNTU4MzU1N30.db99R6p6E8rOekBWly1WvlT0oVsH-LNhihw-Km_3SP8';
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const TIER_WEIGHTS = { 'S': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1 };
+        
+        let allParticipants = [];
+        let decisions = {}; // Stocke les gagnants
+        let matchHistory = []; // Liste des matchs pour l'affichage
+
+        async function initSetup() {
+            const { data, error } = await client.from('characters').select('*');
+            if (error || data.length < 2) return document.getElementById('setup-msg').innerText = "Ajoutez au moins 2 personnages.";
+
+            data.sort((a, b) => (TIER_WEIGHTS[b.tier] || 0) - (TIER_WEIGHTS[a.tier] || 0) || Math.random() - 0.5);
+
+            let nextPowerOf2 = 2;
+            while (nextPowerOf2 < data.length) nextPowerOf2 *= 2;
+
+            let byesNeeded = nextPowerOf2 - data.length;
+            let initialRoster = [...data];
+            for (let i = 0; i < byesNeeded; i++) initialRoster.push({ id: 'bye-'+i, isBye: true, name: 'BYE' });
+
+            allParticipants = createSeededBracket(initialRoster);
+            document.getElementById('setup-msg').innerHTML = `${data.length} Combattants prêts !`;
+            document.getElementById('start-btn').style.display = "inline-block";
+        }
+
+        function createSeededBracket(roster) {
+            const mathLog = Math.log2(roster.length);
+            let bracket = [1, 2];
+            for (let i = 1; i < mathLog; i++) {
+                let temp = [], sum = Math.pow(2, i + 1) + 1;
+                for (let j = 0; j < bracket.length; j++) { temp.push(bracket[j]); temp.push(sum - bracket[j]); }
+                bracket = temp;
+            }
+            return bracket.map(seed => roster[seed - 1]);
+        }
+
+        function getRoundName(count) {
+            if (count === 2) return "Grande Finale";
+            if (count === 4) return "Demi-finales";
+            if (count === 8) return "Quarts de finale";
+            if (count === 16) return "Huitièmes de finale";
+            if (count === 32) return "Seizièmes de finale";
+            if (count === 64) return "Trente-deuxièmes de finale";
+            return "Tour des " + count;
+        }
+
+        function startTournament() {
+            document.getElementById('setup-screen').style.display = 'none';
+            updateGame(); 
+        }
+
+        function updateGame() {
+            matchHistory = [];
+            let currentRound = [...allParticipants];
+            let roundIndex = 0;
+            let pendingMatch = null;
+
+            while (currentRound.length > 1) {
+                let nextRound = [];
+                let roundName = getRoundName(currentRound.length);
+                
+                for (let i = 0; i < currentRound.length; i += 2) {
+                    let p1 = currentRound[i];
+                    let p2 = currentRound[i+1];
+                    let matchKey = roundIndex + '-' + (i/2);
+
+                    if (p1.isBye || p2.isBye) {
+                        nextRound.push(p1.isBye && p2.isBye ? p1 : (p1.isBye ? p2 : p1));
+                        continue;
+                    }
+
+                    let decidedWinnerId = decisions[matchKey];
+                    
+                    if (decidedWinnerId === p1.id) {
+                        nextRound.push(p1);
+                        matchHistory.push({ matchKey, roundName, p1, p2, winner: p1, matchNumber: (i/2)+1, totalMatches: currentRound.length/2 });
+                    } else if (decidedWinnerId === p2.id) {
+                        nextRound.push(p2);
+                        matchHistory.push({ matchKey, roundName, p1, p2, winner: p2, matchNumber: (i/2)+1, totalMatches: currentRound.length/2 });
+                    } else {
+                        if (!pendingMatch) {
+                            pendingMatch = { matchKey, roundName, p1, p2, matchNumber: (i/2)+1, totalMatches: currentRound.length/2 };
+                        }
+                    }
+                }
+
+                if (pendingMatch) break; 
+                
+                currentRound = nextRound;
+                roundIndex++;
+            }
+
+            if (pendingMatch) {
+                displayMatch(pendingMatch);
+            } else if (currentRound.length === 1) {
+                showWinner(currentRound[0]);
+            }
+        }
+
+        function displayMatch(m) {
+            document.getElementById('winner-screen').style.display = 'none';
+            document.getElementById('duel-screen').style.display = 'block';
+            
+            document.getElementById('round-title').innerText = m.roundName;
+            document.getElementById('match-number').innerText = m.matchNumber;
+            document.getElementById('total-matches').innerText = m.totalMatches;
+            
+            document.getElementById('name-left').innerText = m.p1.name;
+            document.getElementById('img-left').src = m.p1.image_url;
+            document.getElementById('name-right').innerText = m.p2.name;
+            document.getElementById('img-right').src = m.p2.image_url;
+            
+            window.currentPendingMatchKey = m.matchKey;
+            window.currentP1 = m.p1;
+            window.currentP2 = m.p2;
+        }
+
+        window.selectWinner = function(side) {
+            let winner = side === 'left' ? window.currentP1 : window.currentP2;
+            decisions[window.currentPendingMatchKey] = winner.id;
+            updateGame();
+        };
+
+        window.undoLastMatch = function() {
+            if (matchHistory.length === 0) return alert("Rien à annuler !");
+            let lastMatch = matchHistory[matchHistory.length - 1];
+            delete decisions[lastMatch.matchKey]; 
+            updateGame();
+        };
+
+        window.openHistory = function() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            
+            if (matchHistory.length === 0) {
+                list.innerHTML = '<p style="color:white;">Aucun match joué.</p>';
+            } else {
+                [...matchHistory].reverse().forEach((m) => {
+                    let isP1Winner = m.winner.id === m.p1.id;
+                    list.innerHTML += `
+                        <div class="history-item">
+                            <div>
+                                <span style="color:#94a3b8; font-size:0.8rem;">${m.roundName}</span><br>
+                                <span style="${isP1Winner ? 'color:#10b981; font-weight:bold;' : 'color:#94a3b8;'}">${m.p1.name}</span> 
+                                <span style="color:#ef4444; margin:0 10px;">VS</span> 
+                                <span style="${!isP1Winner ? 'color:#10b981; font-weight:bold;' : 'color:#94a3b8;'}">${m.p2.name}</span>
+                            </div>
+                            <button class="nav-btn" style="background:#ef4444; font-size: 0.9rem;" onclick="replayMatch('${m.matchKey}')">⏪ Refaire</button>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById('history-modal').style.display = 'flex';
+        };
+
+        window.closeHistory = function() {
+            document.getElementById('history-modal').style.display = 'none';
+        };
+
+        // LA NOUVELLE FONCTION QUI FORCE À REJOUER
+        window.replayMatch = function(matchKey) {
+            // 1. On efface la décision pour le match ciblé
+            delete decisions[matchKey];
+            
+            // 2. On efface les décisions des matchs futurs de cette branche
+            let parts = matchKey.split('-');
+            let r = parseInt(parts[0]);
+            let m = parseInt(parts[1]);
+            
+            while (r < 20) {
+                r++;
+                m = Math.floor(m / 2); // C'est la formule magique pour trouver le match suivant dans l'arbre
+                delete decisions[r + '-' + m];
+            }
+            
+            closeHistory();
+            
+            // L'algorithme se relance. Vu que ce match est le premier sans décision, 
+            // il s'affichera à l'écran, et la suite s'enchaînera naturellement !
+            updateGame(); 
+        };
+
+        function showWinner(champion) {
+            document.getElementById('duel-screen').style.display = 'none';
+            document.getElementById('winner-screen').style.display = 'block';
+            document.getElementById('winner-name').innerText = champion.name;
+            document.getElementById('winner-img').src = champion.image_url;
+        }
+
+        initSetup();
+    </script>
+</body>
+</html>
