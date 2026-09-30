@@ -27,6 +27,9 @@
         .tier { font-weight: bold; color: #f87171; padding-bottom: 5px; }
         .badge { position: absolute; top: 5px; right: 5px; background: #3b82f6; color: white; font-size: 10px; padding: 3px 6px; border-radius: 10px; font-weight: bold;}
         
+        /* LA CLASSE MAGIQUE POUR COLORER L'IMAGE CASSÉE EN ROUGE */
+        .img-broken { filter: sepia(100%) hue-rotate(320deg) saturate(500%); border: 2px solid #ef4444; box-sizing: border-box; }
+
         .actions { display: flex; border-top: 1px solid #333; }
         .btn-icon { width: 50%; margin: 0; padding: 8px 0; background: #2d2d2d; color: white; border-radius: 0; font-size: 14px; }
         .btn-icon:hover { background: #444; }
@@ -93,11 +96,11 @@
             <h3 style="margin-top:0; color:#facc15;">Deux images fournies !</h3>
             <div class="choice-options">
                 <div class="choice-option" onclick="resolveImageChoice('file')">
-                    <img id="modal-preview-file" src="">
+                    <img id="modal-preview-file" src="" onerror="this.onerror=null; this.src=DEFAULT_IMAGE; this.classList.add('img-broken');">
                     <p style="margin:5px 0; font-size:14px; font-weight:bold;">Fichier local</p>
                 </div>
                 <div class="choice-option" onclick="resolveImageChoice('url')">
-                    <img id="modal-preview-url" src="">
+                    <img id="modal-preview-url" src="" onerror="this.onerror=null; this.src=DEFAULT_IMAGE; this.classList.add('img-broken');">
                     <p style="margin:5px 0; font-size:14px; font-weight:bold;">Lien URL</p>
                 </div>
             </div>
@@ -122,7 +125,7 @@
     <div class="character-list" id="list"></div>
 
     <div class="pagination">
-        <button class="page-btn" id="prev-btn-bottom" onclick="changePage(-1)">⬅️️</button>
+        <button class="page-btn" id="prev-btn-bottom" onclick="changePage(-1)">⬅️</button>
         <span class="page-info" id="page-info-bottom">Page 1 / 1</span>
         <button class="page-btn" id="next-btn-bottom" onclick="changePage(1)">➡️</button>
     </div>
@@ -132,13 +135,14 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlnaGV2YnRsZnNqcnR5YWpnY3d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDc1NTcsImV4cCI6MjEwNTU4MzU1N30.db99R6p6E8rOekBWly1WvlT0oVsH-LNhihw-Km_3SP8';
         const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } } });
         
-        const DEFAULT_IMAGE = 'https://via.placeholder.com/150?text=Pas+d+image';
+        // NOUVELLE IMAGE PAR DEFAUT
+        const DEFAULT_IMAGE = 'https://media.istockphoto.com/id/2168774111/fr/vectoriel/avatar-ou-signe-de-la-personne-photo-de-profil-ic%C3%B4ne-de-portrait-symbole-de-profil.jpg?s=612x612&w=0&k=20&c=JX4sttMe4ywxQyMFXALeNOdHnvOXxq1nj74ohyMevrs=';
 
         let allCharacters = [];
         let filteredCharacters = [];
         let editingId = null;
         let imageChoiceResolver = null; 
-        let pendingFilter = null; // Pour garder le filtre actif après un renommage
+        let pendingFilter = null; 
 
         let currentPage = 1;
         const itemsPerPage = 32;
@@ -167,7 +171,6 @@
             filterSelect.innerHTML = `<option value="ALL">🌍 Tous les Sets</option>`;
             categories.forEach(cat => filterSelect.innerHTML += `<option value="${cat}">${cat}</option>`);
             
-            // Si on vient de renommer, on force la sélection du nouveau nom
             if (pendingFilter && categories.includes(pendingFilter)) {
                 filterSelect.value = pendingFilter;
                 pendingFilter = null;
@@ -176,28 +179,22 @@
             }
         }
 
-        // --- NOUVELLE FONCTION DE RENOMMAGE ---
         window.renameCurrentSet = async function() {
             const oldName = document.getElementById('filter-select').value;
-            if (oldName === 'ALL') {
-                return alert("Veuillez d'abord sélectionner un Set spécifique dans le menu déroulant à gauche pour le renommer.");
-            }
+            if (oldName === 'ALL') return alert("Veuillez d'abord sélectionner un Set spécifique.");
 
             const newName = prompt(`Entrez le nouveau nom pour le set "${oldName}" :`, oldName);
             if (!newName || newName.trim() === "" || newName.trim() === oldName) return;
             
             const finalNewName = newName.trim();
 
-            // 1. Mettre à jour tous les personnages de ce Set
             if (oldName === 'Général') {
-                // Cas spécial si des persos sont "null" en base de données
                 await client.from('characters').update({ categorie: finalNewName }).is('categorie', null);
                 await client.from('characters').update({ categorie: finalNewName }).eq('categorie', 'Général');
             } else {
                 await client.from('characters').update({ categorie: finalNewName }).eq('categorie', oldName);
             }
 
-            // 2. Mettre à jour le fichier de sauvegarde du tournoi s'il existe
             const { data: saveData } = await client.from('bracket_saves').select('*').eq('set_name', oldName).single();
             if (saveData) {
                 await client.from('bracket_saves').insert({ set_name: finalNewName, save_data: saveData.save_data });
@@ -206,7 +203,7 @@
 
             alert(`✅ Le set a été renommé en "${finalNewName}" avec succès !`);
             pendingFilter = finalNewName;
-            loadCharacters(); // Recharge l'interface
+            loadCharacters(); 
         };
 
         window.toggleNewCategory = function() {
@@ -254,15 +251,16 @@
             
             charactersToShow.forEach(char => {
                 let catLabel = char.categorie || 'Général';
+                // AJOUT DE L'ÉVÉNEMENT ONERROR QUI PASSE L'IMAGE EN ROUGE
                 list.innerHTML += `
                     <div class="card">
                         <div class="badge">${catLabel}</div>
-                        <img src="${char.image_url}" alt="${char.name}" onerror="this.src='${DEFAULT_IMAGE}'">
+                        <img src="${char.image_url}" alt="${char.name}" onerror="this.onerror=null; this.src='${DEFAULT_IMAGE}'; this.classList.add('img-broken');">
                         <p><b>${char.name}</b></p>
                         <p class="tier">Rank: ${char.tier}</p>
                         <div class="actions">
                             <button type="button" class="btn-icon" onclick="startEdit('${char.id}')">✏️</button>
-                            <button type="button" class="btn-icon" onclick="deleteChar('${char.id}')">🗑️️</button>
+                            <button type="button" class="btn-icon" onclick="deleteChar('${char.id}')">🗑</button>
                         </div>
                     </div>
                 `;
@@ -329,8 +327,16 @@
         function askUserImageChoice(fileObj, urlStr) {
             return new Promise((resolve) => {
                 imageChoiceResolver = resolve;
-                document.getElementById('modal-preview-file').src = URL.createObjectURL(fileObj);
-                document.getElementById('modal-preview-url').src = urlStr;
+                const fileImg = document.getElementById('modal-preview-file');
+                const urlImg = document.getElementById('modal-preview-url');
+                
+                // On retire le filtre rouge au cas où il y était avant
+                fileImg.classList.remove('img-broken');
+                urlImg.classList.remove('img-broken');
+                
+                fileImg.src = URL.createObjectURL(fileObj);
+                urlImg.src = urlStr;
+                
                 document.getElementById('image-choice-modal').style.display = 'flex';
             });
         }
