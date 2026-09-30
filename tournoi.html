@@ -30,6 +30,9 @@
         .fighter img { width: 100%; height: 45vh; min-height: 350px; max-height: 550px; object-fit: cover; }
         .fighter p { font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: bold; margin: 15px 0; padding: 0 10px; }
         
+        /* LA CLASSE MAGIQUE POUR COLORER L'IMAGE CASSÉE EN ROUGE */
+        .img-broken { filter: sepia(100%) hue-rotate(320deg) saturate(500%); border-color: #ef4444 !important; }
+
         .vs { font-size: 3rem; font-weight: bold; font-style: italic; color: #ef4444; text-shadow: 2px 2px 0 #000; margin: 0 20px; }
 
         .match-controls { margin-top: 30px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
@@ -50,7 +53,7 @@
 
     <h1>Bracket</h1>
 
-    <!-- LE LOBBY (CHOIX DU SET) -->
+    <!-- LE LOBBY -->
     <div id="lobby-screen">
         <h2 style="color: #cbd5e1; margin-top: 0;">Sélectionnez le Set à jouer</h2>
         <select id="set-selector">
@@ -103,14 +106,26 @@
 
         const TIER_WEIGHTS = { 'S': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'E': 1 };
         
+        // NOUVELLE IMAGE PAR DEFAUT
+        const DEFAULT_IMAGE = 'https://media.istockphoto.com/id/2168774111/fr/vectoriel/avatar-ou-signe-de-la-personne-photo-de-profil-ic%C3%B4ne-de-portrait-symbole-de-profil.jpg?s=612x612&w=0&k=20&c=JX4sttMe4ywxQyMFXALeNOdHnvOXxq1nj74ohyMevrs=';
+        
         let activeSetName = "";
         let allParticipants = [];
         let decisions = {}; 
         let matchHistory = []; 
 
-        // 1. Initialisation du Lobby
+        // Fonction pour afficher l'image et la passer en rouge si elle est cassée
+        function setSafeImage(imgElement, url) {
+            imgElement.classList.remove('img-broken'); // On réinitialise l'état
+            imgElement.src = url || DEFAULT_IMAGE;
+            imgElement.onerror = function() {
+                this.onerror = null; // Evite une boucle infinie
+                this.src = DEFAULT_IMAGE;
+                this.classList.add('img-broken'); // Ajoute le filtre rouge CSS
+            };
+        }
+
         async function initLobby() {
-            // On récupère juste les catégories pour créer le menu
             const { data, error } = await client.from('characters').select('categorie');
             if (error) return alert("Erreur de connexion.");
 
@@ -129,32 +144,26 @@
             }
         }
 
-        // 2. L'utilisateur a cliqué sur "Lancer" pour un set précis
         window.loadOrStartSet = async function() {
             activeSetName = document.getElementById('set-selector').value;
             let btn = document.getElementById('start-btn');
             btn.innerText = "Chargement...";
             btn.disabled = true;
 
-            // On cherche la sauvegarde de ce set spécifique
             const { data, error } = await client.from('bracket_saves').select('*').eq('set_name', activeSetName).single();
             
             if (data && data.save_data) {
-                // Sauvegarde trouvée !
                 allParticipants = data.save_data.allParticipants;
                 decisions = data.save_data.decisions;
                 launchUI();
             } else {
-                // Pas de sauvegarde, on initialise un nouveau bracket pour ce set
                 await initNewBracketForSet(activeSetName);
             }
         };
 
         async function initNewBracketForSet(setName) {
-            // On télécharge uniquement les personnages de ce Set
             let { data, error } = await client.from('characters').select('*').eq('categorie', setName);
             
-            // Si des personnages n'ont pas de catégorie en BDD, ils sont considérés comme "Général"
             if (setName === 'Général') {
                 const nullData = await client.from('characters').select('*').is('categorie', null);
                 if (nullData.data) data = data.concat(nullData.data);
@@ -173,7 +182,7 @@
             allParticipants = createSeededBracket(initialRoster);
             decisions = {};
             
-            saveTournament(); // Sauvegarde initiale du Set
+            saveTournament(); 
             launchUI();
         }
 
@@ -194,7 +203,6 @@
             updateGame(); 
         }
 
-        // 3. Système de sauvegarde lié au Set Actif
         async function saveTournament() {
             if (!activeSetName) return;
             const { error } = await client.from('bracket_saves').upsert({
@@ -211,7 +219,6 @@
             }
         };
 
-        // 4. Moteur de Jeu
         function getRoundName(count) {
             if (count === 2) return "Grande Finale";
             if (count === 4) return "Demi-finales";
@@ -278,9 +285,10 @@
             document.getElementById('total-matches').innerText = m.totalMatches;
             
             document.getElementById('name-left').innerText = m.p1.name;
-            document.getElementById('img-left').src = m.p1.image_url;
+            setSafeImage(document.getElementById('img-left'), m.p1.image_url);
+
             document.getElementById('name-right').innerText = m.p2.name;
-            document.getElementById('img-right').src = m.p2.image_url;
+            setSafeImage(document.getElementById('img-right'), m.p2.image_url);
             
             window.currentPendingMatchKey = m.matchKey;
             window.currentP1 = m.p1;
@@ -351,10 +359,9 @@
             document.getElementById('duel-screen').style.display = 'none';
             document.getElementById('winner-screen').style.display = 'block';
             document.getElementById('winner-name').innerText = champion.name;
-            document.getElementById('winner-img').src = champion.image_url;
+            setSafeImage(document.getElementById('winner-img'), champion.image_url);
         }
 
-        // On lance le Lobby au démarrage
         initLobby();
     </script>
 </body>
