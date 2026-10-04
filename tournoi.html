@@ -126,10 +126,27 @@
         }
 
         async function initLobby() {
-            const { data, error } = await client.from('characters').select('categorie');
-            if (error) return alert("Erreur de connexion.");
+            let allCategories = [];
+            let from = 0;
+            const step = 1000;
+            let keepFetching = true;
 
-            const categories = [...new Set(data.map(c => c.categorie || 'Général'))].sort();
+            // Boucle pour récupérer les catégories de TOUS les personnages (au-delà de 1000)
+            while (keepFetching) {
+                const { data, error } = await client
+                    .from('characters')
+                    .select('categorie')
+                    .range(from, from + step - 1);
+                    
+                if (error) return alert("Erreur de connexion.");
+                
+                allCategories = allCategories.concat(data);
+                
+                if (data.length < step) keepFetching = false;
+                else from += step;
+            }
+
+            const categories = [...new Set(allCategories.map(c => c.categorie || 'Général'))].sort();
             
             const selector = document.getElementById('set-selector');
             selector.innerHTML = '';
@@ -162,11 +179,43 @@
         };
 
         async function initNewBracketForSet(setName) {
-            let { data, error } = await client.from('characters').select('*').eq('categorie', setName);
-            
+            let data = [];
+            let from = 0;
+            const step = 1000;
+            let keepFetching = true;
+
+            // Récupérer tous les personnages du Set ciblé avec pagination
+            while (keepFetching) {
+                let query = client.from('characters').select('*').range(from, from + step - 1);
+                if (setName !== 'Général') {
+                    query = query.eq('categorie', setName);
+                }
+                
+                const { data: chunk, error } = await query;
+                if (error) return alert("Erreur lors du chargement des combattants.");
+                
+                data = data.concat(chunk);
+                if (chunk.length < step) keepFetching = false;
+                else from += step;
+            }
+
+            // Cas spécifique du set "Général" : rattraper ceux dont la catégorie est restée à null
             if (setName === 'Général') {
-                const nullData = await client.from('characters').select('*').is('categorie', null);
-                if (nullData.data) data = data.concat(nullData.data);
+                from = 0;
+                keepFetching = true;
+                while (keepFetching) {
+                    const { data: nullChunk, error } = await client
+                        .from('characters')
+                        .select('*')
+                        .is('categorie', null)
+                        .range(from, from + step - 1);
+                        
+                    if (error) break;
+                    if (nullChunk) data = data.concat(nullChunk);
+                    
+                    if (nullChunk.length < step) keepFetching = false;
+                    else from += step;
+                }
             }
 
             if (data.length < 2) return alert(`Il faut au moins 2 personnages dans le set "${setName}" !`);
