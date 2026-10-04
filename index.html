@@ -148,10 +148,35 @@
         const itemsPerPage = 32;
 
         async function loadCharacters() {
-            const { data, error } = await client.from('characters').select('*').order('name');
-            if (error) return console.error("Erreur de chargement", error);
+            let allData = [];
+            let from = 0;
+            const step = 1000;
+            let keepFetching = true;
+
+            // Boucle de pagination pour contourner la limite de 1000 résultats
+            while (keepFetching) {
+                const { data, error } = await client
+                    .from('characters')
+                    .select('*')
+                    .order('name')
+                    .range(from, from + step - 1);
+
+                if (error) {
+                    console.error("Erreur de chargement", error);
+                    return;
+                }
+
+                allData = allData.concat(data);
+
+                // Si la requête renvoie moins de 1000 éléments, on a atteint la fin
+                if (data.length < step) {
+                    keepFetching = false;
+                } else {
+                    from += step;
+                }
+            }
             
-            allCharacters = data;
+            allCharacters = allData;
             updateCategoriesUI();
             applyFilter();
         }
@@ -270,7 +295,7 @@
         window.changePage = function(direction) {
             currentPage += direction;
             renderPage();
-            window.scrollTo({ top: document.querySelector('.filter-bar').offsetTop - 20, behavior: 'smooth' });
+            // window.scrollTo({ top: document.querySelector('.filter-bar').offsetTop - 20, behavior: 'smooth' });
         };
 
         window.deleteChar = async function(id) {
